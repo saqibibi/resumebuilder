@@ -173,28 +173,27 @@ class ResumeBuilder {
     }
 
     formatDescription(text) {
+        // This function is perfect for converting work descriptions into bullet points
         return text
             .split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0)
-            .map(line => line.startsWith('•') || line.startsWith('*') || line.startsWith('-')
-                ? `<div style="margin-left: 15px; margin-bottom: 3px;">• ${line.substring(1).trim()}</div>`
-                : `<div style="margin-bottom: 5px;">${line}</div>`
-            )
+            .map(line => `<li>${line.replace(/•|\*|-/g, '').trim()}</li>`) // Convert each line to a list item
             .join('');
     }
 
     generateResumeHTML() {
         const { personal, summary, experience, education, skills } = this.formData;
 
+        // --- Start of modified HTML generation ---
         let html = `
             <div class="resume-header">
                 <div class="resume-name">${personal.fullName || 'Your Name'}</div>
                 <div class="resume-contact">
-                    ${personal.email ? `<div><i class="fas fa-envelope"></i> ${personal.email}</div>` : ''}
-                    ${personal.phone ? `<div><i class="fas fa-phone"></i> ${personal.phone}</div>` : ''}
-                    ${personal.location ? `<div><i class="fas fa-map-marker-alt"></i> ${personal.location}</div>` : ''}
-                    ${personal.website ? `<div><i class="fas fa-link"></i> ${personal.website}</div>` : ''}
+                    ${personal.email ? `<div>${personal.email}</div>` : ''}
+                    ${personal.phone ? `<div>${personal.phone}</div>` : ''}
+                    ${personal.location ? `<div>${personal.location}</div>` : ''}
+                    ${personal.website ? `<div><a href="${personal.website}">${personal.website}</a></div>` : ''}
                 </div>
             </div>
             <div class="resume-body">
@@ -210,84 +209,57 @@ class ResumeBuilder {
             `;
         }
 
-        // Work Experience
+        // Work Experience (with bullet points)
         if (experience.length > 0 && experience.some(exp => exp.title || exp.company)) {
-            html += `
-                <div class="resume-section">
-                    <div class="section-title">Work Experience</div>
-            `;
-
+            html += `<div class="resume-section">
+                        <div class="section-title">Work Experience</div>`;
             experience.forEach(exp => {
                 if (exp.title || exp.company) {
                     html += `
                         <div class="job-item">
-                            ${exp.title ? `<div class="job-title">${exp.title}</div>` : ''}
-                            ${exp.company ? `<div class="job-company">${exp.company}</div>` : ''}
-                            ${exp.startDate || exp.endDate ? `<div class="job-duration">${exp.startDate}${exp.startDate && exp.endDate ? ' - ' : ''}${exp.endDate}</div>` : ''}
-                            ${exp.description ? `<div class="job-description">${this.formatDescription(exp.description)}</div>` : ''}
+                            <div class="job-title-container">
+                                <div class="job-title">${exp.title}</div>
+                                <div class="job-duration">${exp.startDate} - ${exp.endDate}</div>
+                            </div>
+                            <div class="job-company">${exp.company}</div>
+                            ${exp.description ? `<ul class="job-description">${this.formatDescription(exp.description)}</ul>` : ''}
                         </div>
                     `;
                 }
             });
-
             html += '</div>';
         }
 
-        // Education
+        // Education (improved layout)
         if (education.length > 0 && education.some(edu => edu.degree || edu.school)) {
-            html += `
-                <div class="resume-section">
-                    <div class="section-title">Education</div>
-            `;
-
+            html += `<div class="resume-section">
+                        <div class="section-title">Education</div>`;
             education.forEach(edu => {
                 if (edu.degree || edu.school) {
                     html += `
                         <div class="edu-item">
-                            ${edu.degree ? `<div class="edu-degree">${edu.degree}</div>` : ''}
-                            ${edu.school ? `<div class="edu-school">${edu.school}</div>` : ''}
-                            <div class="edu-details">
-                                ${edu.year ? `<span class="edu-year">${edu.year}</span>` : ''}
-                                ${edu.gpa ? `<span class="edu-gpa">GPA: ${edu.gpa}</span>` : ''}
-                            </div>
+                            <div class="edu-degree">${edu.degree}, ${edu.school}</div>
+                            <div class="edu-year">${edu.year}</div>
                         </div>
                     `;
                 }
             });
-
             html += '</div>';
         }
 
-        // Skills
-        // Inside the generateResumeHTML() method, find the Skills section
-        // ...
-        // Skills
+        // Skills (as a bulleted list)
         if (skills.length > 0) {
             html += `
-        <div class="resume-section">
-            <div class="section-title">Skills</div>
-            <div class="skills-list">
-    `;
-
-            // Update this line to include 'creative' and 'minimal'
-            if (this.currentTemplate === 'modern' || this.currentTemplate === 'wave' || this.currentTemplate === 'creative') {
-                skills.forEach(skill => {
-                    html += `<span class="skill-tag">${skill}</span>`;
-                });
-            } else {
-                skills.forEach((skill, index) => {
-                    html += `<span class="skill-item">${skill}${index < skills.length - 1 ? ', ' : ''}</span>`;
-                });
-            }
-
-            html += `
-            </div>
-        </div>
-    `;
+                <div class="resume-section">
+                    <div class="section-title">Skills</div>
+                    <ul class="skills-list">
+                        ${skills.map(skill => `<li>${skill}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
         }
 
-        html += '</div>'; // Close resume-body
-
+        html += '</div>';
         return html;
     }
 
@@ -347,334 +319,233 @@ class ResumeBuilder {
     }
 
     async downloadPDF() {
-        const downloadBtn = document.getElementById('downloadBtn');
-        const originalText = downloadBtn.innerHTML;
+    const downloadBtn = document.getElementById('downloadBtn');
+    const originalText = downloadBtn.innerHTML;
 
-        // Show loading state
-        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
-        downloadBtn.disabled = true;
+    // Show loading state
+    downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+    downloadBtn.disabled = true;
 
-        try {
-            // Ensure form data is collected properly
-            this.collectFormData();
+    try {
+        // Ensure form data is collected properly
+        this.collectFormData();
 
-            // Safe destructuring with fallbacks
-            const personal = this.formData.personal || {};
-            const summary = this.formData.summary || '';
-            const experience = this.formData.experience || [];
-            const education = this.formData.education || [];
-            const skills = this.formData.skills || [];
+        // Safe destructuring with fallbacks
+        const personal = this.formData.personal || {};
+        const summary = this.formData.summary || '';
+        const experience = this.formData.experience || [];
+        const education = this.formData.education || [];
+        const skills = this.formData.skills || [];
 
-            // Create PDF with native text rendering
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'pt',
-                format: 'a4',
-                compress: true
-            });
+        // Create PDF with native text rendering
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'pt',
+            format: 'a4',
+            compress: true
+        });
 
-            let yPosition = 50;
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const margin = 50;
-            const usableWidth = pageWidth - (margin * 2);
-            const maxYPosition = pageHeight - 50;
+        let yPosition = 0;
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 40;
+        const usableWidth = pageWidth - (margin * 2);
+        const maxYPosition = pageHeight - 40;
 
-            // Helper function to get template colors
-            const getPDFColor = () => {
-                switch (this.currentTemplate) {
-                    case 'modern': return [102, 126, 234];
-                    case 'professional': return [44, 62, 80];
-                    case 'ats': return [0, 0, 0];
-                    case 'wave': return [9, 132, 227];
-                    case 'creative': return [39, 174, 96]; // A green color to match the "Creative" design
-                    case 'minimal': return [0, 0, 0];
-                    default: return [102, 126, 234];
-                }
-            };
-
-            const getPDFHeaderColor = () => {
-                switch (this.currentTemplate) {
-                    case 'modern': return [102, 126, 234];
-                    case 'wave': return [116, 185, 255];
-                    case 'creative': return [39, 174, 96]; // A green color to match the "Creative" design
-                    case 'minimal': return [248, 250, 252];
-                    default: return [102, 126, 234];
-                }
-            };
-
-            // Helper function to check if we need a new page
-            const checkPageBreak = (spaceNeeded = 30) => {
-                if (yPosition + spaceNeeded > maxYPosition) {
-                    pdf.addPage();
-                    yPosition = 50;
-                    return true;
-                }
-                return false;
-            };
-
-            // Helper function to add wrapped text
-            const addWrappedText = (text, fontSize, fontStyle = 'normal', maxWidth = usableWidth) => {
-                pdf.setFontSize(fontSize);
-                pdf.setFont('helvetica', fontStyle);
-
-                const lines = pdf.splitTextToSize(text, maxWidth);
-                const lineHeight = fontSize * 1.2;
-
-                checkPageBreak(lines.length * lineHeight);
-
-                lines.forEach(line => {
-                    pdf.text(line, margin, yPosition);
-                    yPosition += lineHeight;
-                });
-
-                return yPosition;
-            };
-
-            // Add Header
-            if (this.currentTemplate === 'modern' || this.currentTemplate === 'wave') {
-                const headerColor = getPDFHeaderColor();
-                pdf.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
-                pdf.rect(0, 0, pageWidth, 150, 'F');
+        // Helper function to get template colors
+        const getPDFColor = (type = 'primary') => {
+            switch (this.currentTemplate) {
+                case 'modern': return type === 'primary' ? [102, 126, 234] : [255, 255, 255];
+                case 'professional': return type === 'primary' ? [44, 62, 80] : [255, 255, 255];
+                case 'ats': return [0, 0, 0];
+                case 'wave': return type === 'primary' ? [9, 132, 227] : [255, 255, 255];
+                case 'creative': return type === 'primary' ? [39, 174, 96] : [255, 255, 255];
+                case 'minimal': return [0, 0, 0];
+                default: return [44, 62, 80];
             }
-
-            // Name - Fixed the error line
-            pdf.setFontSize(28);
-            pdf.setFont('helvetica', 'bold');
-
-            if (this.currentTemplate === 'ats') {
-                pdf.setTextColor(0, 0, 0);
-            } else {
-                pdf.setTextColor(255, 255, 255);
+        };
+        
+        const setFontByTemplate = (style = 'normal') => {
+             switch (this.currentTemplate) {
+                case 'professional':
+                    pdf.setFont('times', style);
+                    break;
+                case 'ats':
+                     pdf.setFont('helvetica', style);
+                     break;
+                default:
+                    pdf.setFont('helvetica', style);
             }
-
-            // Safe name handling - THIS IS THE FIX
-            const fullName = personal.fullName || '';
-            const name = fullName.trim() || 'Your Name';
-            const nameWidth = pdf.getTextWidth(name);
-            const centerX = (pageWidth - nameWidth) / 2;
-            pdf.text(name, centerX, 80);
-
-            // Contact info
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'normal');
-
-            const contacts = [
-                personal.email,
-                personal.phone,
-                personal.location,
-                personal.website
-            ].filter(contact => contact && contact.trim());
-
-            if (contacts.length > 0) {
-                const contactLine = contacts.join(' | ');
-                const contactWidth = pdf.getTextWidth(contactLine);
-                const contactX = (pageWidth - contactWidth) / 2;
-                pdf.text(contactLine, contactX, 110);
-            }
-
-            // Add line separator for ATS template
-            if (this.currentTemplate === 'ats') {
-                pdf.setDrawColor(0, 0, 0);
-                pdf.setLineWidth(2);
-                pdf.line(margin, 130, pageWidth - margin, 130);
-            }
-
-            yPosition = 180; // After header
-
-            // Professional Summary
-            if (summary && summary.trim()) {
-                checkPageBreak(60);
-                yPosition += 20;
-
-                const sectionColor = getPDFColor();
-                pdf.setFontSize(16);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.text('PROFESSIONAL SUMMARY', margin, yPosition);
-
-                pdf.setDrawColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.setLineWidth(2);
-                pdf.line(margin, yPosition + 5, margin + 200, yPosition + 5);
-
-                yPosition += 25;
-
-                pdf.setTextColor(60, 60, 60);
-                addWrappedText(summary, 11, 'normal');
-                yPosition += 10;
-            }
-
-            // Work Experience
-            if (experience && experience.length > 0 && experience.some(exp => exp.title || exp.company)) {
-                checkPageBreak(60);
-                yPosition += 20;
-
-                const sectionColor = getPDFColor();
-                pdf.setFontSize(16);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.text('WORK EXPERIENCE', margin, yPosition);
-
-                pdf.setDrawColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.setLineWidth(2);
-                pdf.line(margin, yPosition + 5, margin + 200, yPosition + 5);
-
-                yPosition += 25;
-
-                experience.forEach((exp, index) => {
-                    if (exp && (exp.title || exp.company)) {
-                        checkPageBreak(80);
-
-                        if (exp.title) {
-                            pdf.setFontSize(13);
-                            pdf.setFont('helvetica', 'bold');
-                            pdf.setTextColor(40, 40, 40);
-                            pdf.text(exp.title, margin, yPosition);
-                            yPosition += 18;
-                        }
-
-                        if (exp.company || exp.startDate || exp.endDate) {
-                            let companyLine = '';
-                            if (exp.company) companyLine += exp.company;
-                            if (exp.startDate || exp.endDate) {
-                                if (companyLine) companyLine += ' | ';
-                                companyLine += `${exp.startDate || ''}${exp.startDate && exp.endDate ? ' - ' : ''}${exp.endDate || ''}`;
-                            }
-
-                            pdf.setFontSize(11);
-                            pdf.setFont('helvetica', 'normal');
-                            const sectionColor = getPDFColor();
-                            pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                            pdf.text(companyLine, margin, yPosition);
-                            yPosition += 18;
-                        }
-
-                        if (exp.description) {
-                            pdf.setTextColor(80, 80, 80);
-                            const descLines = exp.description.split('\n').filter(line => line.trim());
-
-                            descLines.forEach(line => {
-                                const trimmedLine = line.trim();
-                                if (trimmedLine.startsWith('•') || trimmedLine.startsWith('*') || trimmedLine.startsWith('-')) {
-                                    checkPageBreak(15);
-                                    pdf.text('•', margin, yPosition);
-
-                                    pdf.setFontSize(10);
-                                    const bulletText = trimmedLine.substring(1).trim();
-                                    const lines = pdf.splitTextToSize(bulletText, usableWidth - 15);
-                                    lines.forEach(line => {
-                                        pdf.text(line, margin + 15, yPosition);
-                                        yPosition += 12;
-                                    });
-                                } else {
-                                    addWrappedText(trimmedLine, 10, 'normal');
-                                }
-                            });
-                        }
-
-                        if (index < experience.length - 1) yPosition += 15;
-                    }
-                });
-
-                yPosition += 10;
-            }
-
-            // Education
-            if (education && education.length > 0 && education.some(edu => edu.degree || edu.school)) {
-                checkPageBreak(60);
-                yPosition += 20;
-
-                const sectionColor = getPDFColor();
-                pdf.setFontSize(16);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.text('EDUCATION', margin, yPosition);
-
-                pdf.setDrawColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.setLineWidth(2);
-                pdf.line(margin, yPosition + 5, margin + 200, yPosition + 5);
-
-                yPosition += 25;
-
-                education.forEach((edu, index) => {
-                    if (edu && (edu.degree || edu.school)) {
-                        checkPageBreak(50);
-
-                        if (edu.degree) {
-                            pdf.setFontSize(12);
-                            pdf.setFont('helvetica', 'bold');
-                            pdf.setTextColor(40, 40, 40);
-                            pdf.text(edu.degree, margin, yPosition);
-                            yPosition += 16;
-                        }
-
-                        let schoolLine = '';
-                        if (edu.school) schoolLine += edu.school;
-                        if (edu.year) {
-                            if (schoolLine) schoolLine += ' | ';
-                            schoolLine += edu.year;
-                        }
-                        if (edu.gpa) {
-                            if (schoolLine) schoolLine += ' | ';
-                            schoolLine += `GPA: ${edu.gpa}`;
-                        }
-
-                        if (schoolLine) {
-                            pdf.setFontSize(11);
-                            pdf.setFont('helvetica', 'normal');
-                            const sectionColor = getPDFColor();
-                            pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                            pdf.text(schoolLine, margin, yPosition);
-                            yPosition += 16;
-                        }
-
-                        if (index < education.length - 1) yPosition += 10;
-                    }
-                });
-
-                yPosition += 10;
-            }
-
-            // Skills
-            if (skills && skills.length > 0) {
-                checkPageBreak(60);
-                yPosition += 20;
-
-                const sectionColor = getPDFColor();
-                pdf.setFontSize(16);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.text('SKILLS', margin, yPosition);
-
-                pdf.setDrawColor(sectionColor[0], sectionColor[1], sectionColor[2]);
-                pdf.setLineWidth(2);
-                pdf.line(margin, yPosition + 5, margin + 200, yPosition + 5);
-
-                yPosition += 25;
-
-                const skillsText = skills.join(' • ');
-                pdf.setFontSize(11);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setTextColor(80, 80, 80);
-                addWrappedText(skillsText, 11, 'normal');
-            }
-
-            // Generate filename - Fixed this too
-            const fileName = fullName.trim() || 'Resume';
-            const filename = `${fileName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase()}_resume.pdf`;
-
-            pdf.save(filename);
-
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            console.log('Form data:', this.formData); // Debug line
-            alert('There was an error generating the PDF. Please try again.');
-        } finally {
-            downloadBtn.innerHTML = originalText;
-            downloadBtn.disabled = false;
         }
+
+
+        // Helper function to check if we need a new page
+        const checkPageBreak = (spaceNeeded = 30) => {
+            if (yPosition + spaceNeeded > maxYPosition) {
+                pdf.addPage();
+                yPosition = 40;
+                return true;
+            }
+            return false;
+        };
+
+        // --- PDF HEADER ---
+        const primaryColor = getPDFColor('primary');
+        const secondaryColor = getPDFColor('secondary');
+
+        if (['modern', 'professional', 'wave', 'creative'].includes(this.currentTemplate)) {
+            pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            pdf.rect(0, 0, pageWidth, 120, 'F');
+            
+            pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+            setFontByTemplate('bold');
+            pdf.setFontSize(26);
+            pdf.text(personal.fullName || 'Your Name', pageWidth / 2, 60, { align: 'center' });
+
+            setFontByTemplate('normal');
+            pdf.setFontSize(10);
+            const contactInfo = [personal.email, personal.phone, personal.location, personal.website].filter(Boolean).join(' | ');
+            pdf.text(contactInfo, pageWidth / 2, 85, { align: 'center' });
+            yPosition = 150;
+        } else { // ATS and Minimal
+            yPosition = 60;
+            setFontByTemplate('bold');
+            pdf.setFontSize(24);
+            pdf.setTextColor(0,0,0);
+            pdf.text(personal.fullName || 'Your Name', pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 25;
+
+            setFontByTemplate('normal');
+            pdf.setFontSize(10);
+            const contactInfo = [personal.email, personal.phone, personal.location, personal.website].filter(Boolean).join(' | ');
+            pdf.text(contactInfo, pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 20;
+
+            pdf.setDrawColor(180, 180, 180);
+            pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+            yPosition += 30;
+        }
+
+
+        // --- PDF BODY ---
+        
+        const addSection = (title, contentFn) => {
+            checkPageBreak(50);
+            setFontByTemplate('bold');
+            pdf.setFontSize(14);
+            pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            pdf.text(title.toUpperCase(), margin, yPosition);
+            yPosition += 8;
+
+            pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            pdf.setLineWidth(1.5);
+            pdf.line(margin, yPosition, margin + 80, yPosition);
+            yPosition += 20;
+            
+            contentFn();
+            
+            yPosition += 25; // Spacing after section
+        }
+
+        // Professional Summary
+        if (summary) {
+            addSection('Professional Summary', () => {
+                checkPageBreak(pdf.splitTextToSize(summary, usableWidth).length * 12);
+                setFontByTemplate('normal');
+                pdf.setFontSize(10);
+                pdf.setTextColor(50, 50, 50);
+                const lines = pdf.splitTextToSize(summary, usableWidth);
+                pdf.text(lines, margin, yPosition);
+                yPosition += lines.length * 12;
+            });
+        }
+        
+        // Work Experience
+        if (experience.length > 0 && experience.some(e => e.title)) {
+            addSection('Work Experience', () => {
+                experience.forEach(exp => {
+                    checkPageBreak(60);
+                    setFontByTemplate('bold');
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(0,0,0);
+                    pdf.text(exp.title, margin, yPosition);
+                    
+                    setFontByTemplate('normal');
+                    pdf.setFontSize(10);
+                    const dateText = `${exp.startDate || ''}${exp.startDate && exp.endDate ? ' - ' : ''}${exp.endDate || ''}`;
+                    pdf.text(dateText, pageWidth - margin, yPosition, { align: 'right' });
+                    yPosition += 15;
+
+                    setFontByTemplate('bold');
+                    pdf.setTextColor(80, 80, 80);
+                    pdf.text(exp.company, margin, yPosition);
+                    yPosition += 15;
+
+                    if(exp.description){
+                        checkPageBreak(pdf.splitTextToSize(exp.description, usableWidth).length * 12);
+                        setFontByTemplate('normal');
+                        pdf.setFontSize(10);
+                        pdf.setTextColor(50, 50, 50);
+                        const descLines = pdf.splitTextToSize(exp.description, usableWidth);
+                        pdf.text(descLines, margin, yPosition);
+                        yPosition += descLines.length * 12 + 10;
+                    }
+                });
+            });
+        }
+
+        // Education
+        if (education.length > 0 && education.some(e => e.degree)) {
+            addSection('Education', () => {
+                 education.forEach(edu => {
+                    checkPageBreak(40);
+                    setFontByTemplate('bold');
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(0,0,0);
+                    pdf.text(edu.degree, margin, yPosition);
+
+                    setFontByTemplate('normal');
+                    pdf.setFontSize(10);
+                    pdf.text(edu.year || '', pageWidth - margin, yPosition, { align: 'right' });
+                    yPosition += 15;
+
+                    setFontByTemplate('normal');
+                    pdf.setTextColor(80, 80, 80);
+                    pdf.text(edu.school, margin, yPosition);
+                    yPosition += 15;
+                 });
+            });
+        }
+
+        // Skills
+        if (skills.length > 0) {
+            addSection('Skills', () => {
+                checkPageBreak(40);
+                setFontByTemplate('normal');
+                pdf.setFontSize(10);
+                pdf.setTextColor(50, 50, 50);
+                const skillsText = skills.join(', ');
+                const lines = pdf.splitTextToSize(skillsText, usableWidth);
+                pdf.text(lines, margin, yPosition);
+                yPosition += lines.length * 12;
+            });
+        }
+
+        // Generate filename
+        const fullName = personal.fullName || 'Resume';
+        const filename = `${fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase()}_resume.pdf`;
+        
+        pdf.save(filename);
+
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        alert('There was an error generating the PDF. Please try again.');
+    } finally {
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
     }
+}
 
 }
 
