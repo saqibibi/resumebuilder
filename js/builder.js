@@ -5,7 +5,7 @@
 
 class ResumeBuilder {
     constructor() {
-        this.currentTemplate = 'modern';
+        this.currentTemplate = 'ats';
         this.formData = {
             personal: {},
             summary: '',
@@ -231,14 +231,14 @@ class ResumeBuilder {
         }
 
         // Education (improved layout)
+        // Education
         if (education.length > 0 && education.some(edu => edu.degree || edu.school)) {
             html += `<div class="resume-section">
                         <div class="section-title">Education</div>`;
             education.forEach(edu => {
                 if (edu.degree || edu.school) {
                     html += `
-                        <div class="edu-item">
-                            <div class="edu-degree">${edu.degree}, ${edu.school}</div>
+                        <div class="edu-item edu-item-spacing">  <div class="edu-degree">${edu.degree}${edu.school ? ` | ${edu.school}` : ''}</div>
                             <div class="edu-year">${edu.year}</div>
                         </div>
                     `;
@@ -318,234 +318,231 @@ class ResumeBuilder {
         });
     }
 
+    // NEW downloadPDF() function for js/builder.js
+
     async downloadPDF() {
-    const downloadBtn = document.getElementById('downloadBtn');
-    const originalText = downloadBtn.innerHTML;
+        const downloadBtn = document.getElementById('downloadBtn');
+        const originalText = downloadBtn ? downloadBtn.innerHTML : '';
 
-    // Show loading state
-    downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
-    downloadBtn.disabled = true;
-
-    try {
-        // Ensure form data is collected properly
-        this.collectFormData();
-
-        // Safe destructuring with fallbacks
-        const personal = this.formData.personal || {};
-        const summary = this.formData.summary || '';
-        const experience = this.formData.experience || [];
-        const education = this.formData.education || [];
-        const skills = this.formData.skills || [];
-
-        // Create PDF with native text rendering
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'pt',
-            format: 'a4',
-            compress: true
-        });
-
-        let yPosition = 0;
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 40;
-        const usableWidth = pageWidth - (margin * 2);
-        const maxYPosition = pageHeight - 40;
-
-        // Helper function to get template colors
-        const getPDFColor = (type = 'primary') => {
-            switch (this.currentTemplate) {
-                case 'modern': return type === 'primary' ? [102, 126, 234] : [255, 255, 255];
-                case 'professional': return type === 'primary' ? [44, 62, 80] : [255, 255, 255];
-                case 'ats': return [0, 0, 0];
-                case 'wave': return type === 'primary' ? [9, 132, 227] : [255, 255, 255];
-                case 'creative': return type === 'primary' ? [39, 174, 96] : [255, 255, 255];
-                case 'minimal': return [0, 0, 0];
-                default: return [44, 62, 80];
-            }
-        };
-        
-        const setFontByTemplate = (style = 'normal') => {
-             switch (this.currentTemplate) {
-                case 'professional':
-                    pdf.setFont('times', style);
-                    break;
-                case 'ats':
-                     pdf.setFont('helvetica', style);
-                     break;
-                default:
-                    pdf.setFont('helvetica', style);
-            }
+        if (downloadBtn) {
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving & Generating...';
+            downloadBtn.disabled = true;
         }
 
+        try {
+            // collect latest form data
+            this.collectFormData();
 
-        // Helper function to check if we need a new page
-        const checkPageBreak = (spaceNeeded = 30) => {
-            if (yPosition + spaceNeeded > maxYPosition) {
-                pdf.addPage();
-                yPosition = 40;
-                return true;
+            // Attempt to save to API but don't block PDF generation on failure
+            try {
+                const dataToSend = this.formData;
+                const apiResponse = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToSend),
+                });
+
+                const result = await apiResponse.json().catch(() => ({}));
+                if (!result.success) {
+                    console.warn('API Save Failed, continuing with PDF download:', result.message || result);
+                }
+            } catch (apiError) {
+                console.error('Network or API deployment error, continuing with PDF download:', apiError);
             }
-            return false;
-        };
 
-        // --- PDF HEADER ---
-        const primaryColor = getPDFColor('primary');
-        const secondaryColor = getPDFColor('secondary');
+            // Begin PDF generation
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'pt',
+                format: 'a4',
+                compress: true
+            });
 
-        if (['modern', 'professional', 'wave', 'creative'].includes(this.currentTemplate)) {
-            pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-            pdf.rect(0, 0, pageWidth, 120, 'F');
-            
-            pdf.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-            setFontByTemplate('bold');
-            pdf.setFontSize(26);
-            pdf.text(personal.fullName || 'Your Name', pageWidth / 2, 60, { align: 'center' });
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const margin = 40;
+            const usableWidth = pageWidth - (margin * 2);
+            const maxYPosition = pageHeight - 40;
+            let yPosition = 60;
 
-            setFontByTemplate('normal');
-            pdf.setFontSize(10);
-            const contactInfo = [personal.email, personal.phone, personal.location, personal.website].filter(Boolean).join(' | ');
-            pdf.text(contactInfo, pageWidth / 2, 85, { align: 'center' });
-            yPosition = 150;
-        } else { // ATS and Minimal
-            yPosition = 60;
+            const setFontByTemplate = (style = 'normal') => {
+                // Use ATS-safe font variants
+                try {
+                    pdf.setFont('helvetica', style);
+                } catch (e) {
+                    // fallback if style not supported
+                    pdf.setFont('helvetica');
+                }
+            };
+
+            const checkPageBreak = (spaceNeeded = 30) => {
+                if (yPosition + spaceNeeded > maxYPosition) {
+                    pdf.addPage();
+                    yPosition = 40;
+                    return true;
+                }
+                return false;
+            };
+
+            // Header
             setFontByTemplate('bold');
             pdf.setFontSize(24);
-            pdf.setTextColor(0,0,0);
-            pdf.text(personal.fullName || 'Your Name', pageWidth / 2, yPosition, { align: 'center' });
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(this.formData.personal.fullName || 'Your Name', pageWidth / 2, yPosition, { align: 'center' });
             yPosition += 25;
 
             setFontByTemplate('normal');
             pdf.setFontSize(10);
-            const contactInfo = [personal.email, personal.phone, personal.location, personal.website].filter(Boolean).join(' | ');
-            pdf.text(contactInfo, pageWidth / 2, yPosition, { align: 'center' });
+            const contactInfo = [this.formData.personal.email, this.formData.personal.phone, this.formData.personal.location, this.formData.personal.website].filter(Boolean).join(' | ');
+            if (contactInfo) {
+                pdf.text(contactInfo, pageWidth / 2, yPosition, { align: 'center' });
+            }
             yPosition += 20;
 
             pdf.setDrawColor(180, 180, 180);
             pdf.line(margin, yPosition, pageWidth - margin, yPosition);
             yPosition += 30;
-        }
 
+            const addSection = (title, contentFn) => {
+                checkPageBreak(50);
+                setFontByTemplate('bold');
+                pdf.setFontSize(14);
+                pdf.setTextColor(0, 0, 0);
+                pdf.text(title.toUpperCase(), margin, yPosition);
+                yPosition += 8;
 
-        // --- PDF BODY ---
-        
-        const addSection = (title, contentFn) => {
-            checkPageBreak(50);
-            setFontByTemplate('bold');
-            pdf.setFontSize(14);
-            pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-            pdf.text(title.toUpperCase(), margin, yPosition);
-            yPosition += 8;
+                const textWidth = pdf.getTextWidth(title.toUpperCase());
+                pdf.setDrawColor(0, 0, 0);
+                pdf.setLineWidth(1);
+                pdf.line(margin, yPosition, margin + textWidth, yPosition);
+                yPosition += 20;
 
-            pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-            pdf.setLineWidth(1.5);
-            pdf.line(margin, yPosition, margin + 80, yPosition);
-            yPosition += 20;
-            
-            contentFn();
-            
-            yPosition += 25; // Spacing after section
-        }
-
-        // Professional Summary
-        if (summary) {
-            addSection('Professional Summary', () => {
-                checkPageBreak(pdf.splitTextToSize(summary, usableWidth).length * 12);
                 setFontByTemplate('normal');
-                pdf.setFontSize(10);
-                pdf.setTextColor(50, 50, 50);
-                const lines = pdf.splitTextToSize(summary, usableWidth);
-                pdf.text(lines, margin, yPosition);
-                yPosition += lines.length * 12;
-            });
-        }
-        
-        // Work Experience
-        if (experience.length > 0 && experience.some(e => e.title)) {
-            addSection('Work Experience', () => {
-                experience.forEach(exp => {
-                    checkPageBreak(60);
-                    setFontByTemplate('bold');
-                    pdf.setFontSize(11);
-                    pdf.setTextColor(0,0,0);
-                    pdf.text(exp.title, margin, yPosition);
-                    
+                contentFn();
+                yPosition += 25;
+            };
+
+            // Professional Summary
+            if (this.formData.summary) {
+                addSection('Professional Summary', () => {
+                    const lines = pdf.splitTextToSize(this.formData.summary, usableWidth);
+                    checkPageBreak(lines.length * 12);
                     setFontByTemplate('normal');
                     pdf.setFontSize(10);
-                    const dateText = `${exp.startDate || ''}${exp.startDate && exp.endDate ? ' - ' : ''}${exp.endDate || ''}`;
-                    pdf.text(dateText, pageWidth - margin, yPosition, { align: 'right' });
-                    yPosition += 15;
+                    pdf.setTextColor(50, 50, 50);
+                    pdf.text(lines, margin, yPosition);
+                    yPosition += lines.length * 12;
+                });
+            }
 
-                    setFontByTemplate('bold');
-                    pdf.setTextColor(80, 80, 80);
-                    pdf.text(exp.company, margin, yPosition);
-                    yPosition += 15;
+            // Work Experience
+            if (this.formData.experience && this.formData.experience.length > 0 && this.formData.experience.some(e => e.title || e.company)) {
+                addSection('Work Experience', () => {
+                    this.formData.experience.forEach(exp => {
+                        if (!(exp.title || exp.company || exp.description)) return;
+                        checkPageBreak(60);
 
-                    if(exp.description){
-                        checkPageBreak(pdf.splitTextToSize(exp.description, usableWidth).length * 12);
+                        setFontByTemplate('bold');
+                        pdf.setFontSize(11);
+                        pdf.setTextColor(0, 0, 0);
+                        const titleCompany = `${exp.title || ''}${exp.company ? ` | ${exp.company}` : ''}`;
+                        pdf.text(titleCompany, margin, yPosition);
+
                         setFontByTemplate('normal');
                         pdf.setFontSize(10);
-                        pdf.setTextColor(50, 50, 50);
-                        const descLines = pdf.splitTextToSize(exp.description, usableWidth);
-                        pdf.text(descLines, margin, yPosition);
-                        yPosition += descLines.length * 12 + 10;
-                    }
+                        const dateText = `${exp.startDate || ''}${exp.startDate && exp.endDate ? ' - ' : ''}${exp.endDate || ''}`;
+                        if (dateText.trim()) {
+                            pdf.text(dateText, pageWidth - margin, yPosition, { align: 'right' });
+                        }
+                        yPosition += 15;
+
+                        if (exp.description) {
+                            const list = exp.description
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(line => line.length > 0);
+
+                            list.forEach(item => {
+                                const itemLines = pdf.splitTextToSize(`• ${item}`, usableWidth);
+                                checkPageBreak(itemLines.length * 12);
+                                pdf.setFontSize(10);
+                                pdf.setTextColor(50, 50, 50);
+                                pdf.text(itemLines, margin, yPosition);
+                                yPosition += itemLines.length * 12;
+                            });
+                            yPosition += 10;
+                        }
+                    });
                 });
-            });
-        }
+            }
 
-        // Education
-        if (education.length > 0 && education.some(e => e.degree)) {
-            addSection('Education', () => {
-                 education.forEach(edu => {
+            // Education
+            if (this.formData.education && this.formData.education.length > 0 && this.formData.education.some(e => e.degree || e.school)) {
+                addSection('Education', () => {
+                    this.formData.education.forEach(edu => {
+                        if (!(edu.degree || edu.school)) return;
+                        checkPageBreak(40);
+
+                        setFontByTemplate('bold');
+                        pdf.setFontSize(11);
+                        pdf.setTextColor(0, 0, 0);
+                        pdf.text(edu.degree || '', margin, yPosition);
+
+                        setFontByTemplate('normal');
+                        pdf.setFontSize(10);
+                        if (edu.year) {
+                            pdf.text(edu.year, pageWidth - margin, yPosition, { align: 'right' });
+                        }
+                        yPosition += 15;
+
+                        setFontByTemplate('normal');
+                        pdf.setFontSize(10);
+                        pdf.setTextColor(80, 80, 80);
+                        if (edu.school) {
+                            const schoolLines = pdf.splitTextToSize(edu.school, usableWidth);
+                            pdf.text(schoolLines, margin, yPosition);
+                            yPosition += schoolLines.length * 12;
+                        } else {
+                            yPosition += 0;
+                        }yPosition += 15;
+                    });
+                });
+            }
+
+            // Skills
+            if (this.formData.skills && this.formData.skills.length > 0) {
+                addSection('Skills', () => {
                     checkPageBreak(40);
-                    setFontByTemplate('bold');
-                    pdf.setFontSize(11);
-                    pdf.setTextColor(0,0,0);
-                    pdf.text(edu.degree, margin, yPosition);
-
                     setFontByTemplate('normal');
                     pdf.setFontSize(10);
-                    pdf.text(edu.year || '', pageWidth - margin, yPosition, { align: 'right' });
-                    yPosition += 15;
+                    pdf.setTextColor(50, 50, 50);
 
-                    setFontByTemplate('normal');
-                    pdf.setTextColor(80, 80, 80);
-                    pdf.text(edu.school, margin, yPosition);
-                    yPosition += 15;
-                 });
-            });
+                    this.formData.skills.forEach(skill => {
+                        const lines = pdf.splitTextToSize(`• ${skill}`, usableWidth);
+                        checkPageBreak(lines.length * 12);
+                        pdf.text(lines, margin, yPosition);
+                        yPosition += lines.length * 12;
+                    });
+                });
+            }
+
+            // Save file
+            const fullName = (this.formData.personal.fullName || 'Resume').trim();
+            const filename = `${fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase()}_resume.pdf`;
+            pdf.save(filename);
+
+        } catch (error) {
+            console.error('Fatal error during PDF generation:', error);
+        } finally {
+            if (downloadBtn) {
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            }
         }
-
-        // Skills
-        if (skills.length > 0) {
-            addSection('Skills', () => {
-                checkPageBreak(40);
-                setFontByTemplate('normal');
-                pdf.setFontSize(10);
-                pdf.setTextColor(50, 50, 50);
-                const skillsText = skills.join(', ');
-                const lines = pdf.splitTextToSize(skillsText, usableWidth);
-                pdf.text(lines, margin, yPosition);
-                yPosition += lines.length * 12;
-            });
-        }
-
-        // Generate filename
-        const fullName = personal.fullName || 'Resume';
-        const filename = `${fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase()}_resume.pdf`;
-        
-        pdf.save(filename);
-
-    } catch (error) {
-        console.error('Error generating PDF:', error);
-        alert('There was an error generating the PDF. Please try again.');
-    } finally {
-        downloadBtn.innerHTML = originalText;
-        downloadBtn.disabled = false;
     }
-}
+
+
 
 }
 

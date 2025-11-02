@@ -510,12 +510,24 @@ body {
     padding: 1.5rem;
 }
 
+.resume-preview.ats .edu-item-spacing {
+    margin-bottom: 1.25rem; /* Adds a clear vertical space after each entry */
+}
+
 .resume-preview.ats .section-title {
     font-size: 1.2rem;
     font-weight: bold;
     color: #000;
     margin-bottom: 0.8rem;
     text-transform: uppercase;
+    width: fit-content; /* This makes the element's width only as wide as its content */
+    
+    /* Apply the line using border-bottom */
+    border-bottom: 2px solid #000; /* Use a clean black line */
+    
+    /* Clear any old padding that might interfere */
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.8rem;
 }
 
 .resume-preview.ats .job-title {
