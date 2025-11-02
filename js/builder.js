@@ -2,6 +2,13 @@
  * Resume Builder JavaScript
  * Handles all functionality including live preview, template switching, and PDF generation
  */
+// --- Top of js/builder.js ---
+
+// Initialize Supabase client using Vercel environment variables
+const SUPABASE_URL = window.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 class ResumeBuilder {
     constructor() {
@@ -13,6 +20,7 @@ class ResumeBuilder {
             education: [{}],
             skills: []
         };
+        this.currentUser = null;
 
         this.init();
     }
@@ -20,6 +28,7 @@ class ResumeBuilder {
     init() {
         this.bindEvents();
         this.updatePreview();
+        this.handleAuth();
     }
 
     bindEvents() {
@@ -42,6 +51,10 @@ class ResumeBuilder {
             this.addEducationField();
         });
 
+        document.getElementById('saveResumeBtn').addEventListener('click', () => { // <<< ADD THESE LINES
+            this.saveResumeDraft();
+        });
+
         // PDF download
         document.getElementById('downloadBtn').addEventListener('click', () => {
             this.downloadPDF();
@@ -55,6 +68,8 @@ class ResumeBuilder {
             }
         });
     }
+
+    
 
     bindFormInputs() {
         // Personal details
@@ -478,6 +493,7 @@ class ResumeBuilder {
             }
 
             // Education
+            // Education
             if (this.formData.education && this.formData.education.length > 0 && this.formData.education.some(e => e.degree || e.school)) {
                 addSection('Education', () => {
                     this.formData.education.forEach(edu => {
@@ -503,9 +519,10 @@ class ResumeBuilder {
                             const schoolLines = pdf.splitTextToSize(edu.school, usableWidth);
                             pdf.text(schoolLines, margin, yPosition);
                             yPosition += schoolLines.length * 12;
-                        } else {
-                            yPosition += 0;
-                        }yPosition += 15;
+                        }
+                        
+                        // ✅ CRITICAL FIX: Ensure spacing is executed cleanly after each entry
+                        yPosition += 15; 
                     });
                 });
             }
@@ -540,6 +557,162 @@ class ResumeBuilder {
                 downloadBtn.disabled = false;
             }
         }
+    }
+
+    // --- AUTHENTICATION / UI MANAGEMENT ---
+    async handleAuth() {
+        const { data: { user } } = await supabase.auth.getUser();
+        this.currentUser = user;
+        const authButton = document.getElementById('authButton');
+        const authText = document.getElementById('authText');
+        const saveButton = document.getElementById('saveResumeBtn');
+
+        if (user) {
+            authButton.innerHTML = 'Logout';
+            authButton.onclick = async () => {
+                await supabase.auth.signOut();
+                this.handleAuth();
+                alert('You have been logged out.');
+            };
+            authText.innerHTML = `Signed in as: <strong>${user.email}</strong>`;
+            saveButton.style.display = 'inline-flex';
+            this.loadResumeDraft(); 
+        } else {
+            authButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login / Sign Up';
+            authButton.onclick = () => {
+                alert('For this prototype, please sign up/log in using a dedicated Supabase page. This button only logs out once you are logged in.');
+            };
+            authButton.classList.remove('active');
+            authText.innerHTML = 'Log in to save your draft.';
+            saveButton.style.display = 'none';
+            this.populateForm({ personal: {}, experience: [], education: [], skills: [] }); 
+        }
+    }
+
+    // --- SAVE LOGIC (Saves to Supabase RLS protected table) ---
+    async saveResumeDraft() {
+        if (!this.currentUser) {
+            alert('Please log in to save your resume.');
+            return;
+        }
+
+        const saveBtn = document.getElementById('saveResumeBtn');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        saveBtn.disabled = true;
+        
+        this.collectFormData();
+        
+        try {
+            // Check if user already has a resume (for UPDATE operation)
+            const { data: existingResume } = await supabase
+                .from('resumes')
+                .select('id')
+                .eq('user_id', this.currentUser.id)
+                .limit(1);
+            
+            const resumeDataToSave = {
+                user_id: this.currentUser.id, 
+                data_json: this.formData,
+            };
+            
+            let saveError;
+            
+            if (existingResume && existingResume.length > 0) {
+                // UPDATE existing record
+                const { error } = await supabase
+                    .from('resumes')
+                    .update(resumeDataToSave)
+                    .eq('id', existingResume[0].id);
+                saveError = error;
+                if (!saveError) alert('Draft updated successfully!');
+            } else {
+                // INSERT new record
+                const { error } = await supabase
+                    .from('resumes')
+                    .insert([resumeDataToSave]);
+                saveError = error;
+                if (!saveError) alert('Draft saved successfully!');
+            }
+            
+            if (saveError) throw saveError;
+
+        } catch (error) {
+            console.error('Database Save Error:', error);
+            alert('Error saving draft. Check Supabase RLS policies or console.');
+        } finally {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
+    }
+    
+    // --- LOAD LOGIC (Loads from Supabase RLS protected table) ---
+    async loadResumeDraft() {
+        if (!this.currentUser) return;
+
+        try {
+            const { data } = await supabase
+                .from('resumes')
+                .select('data_json')
+                .eq('user_id', this.currentUser.id)
+                .limit(1);
+            
+            if (data && data.length > 0) {
+                const savedData = data[0].data_json;
+                this.populateForm(savedData);
+                this.updatePreview(); 
+            }
+
+        } catch (error) {
+            console.error('Database Load Error:', error);
+        }
+    }
+    
+    // --- POPULATE HELPER (Fills the form fields from JSON data) ---
+    populateForm(data) {
+        if (!data) return;
+
+        // 1. Static Fields
+        document.getElementById('fullName').value = data.personal.fullName || '';
+        document.getElementById('email').value = data.personal.email || '';
+        document.getElementById('phone').value = data.personal.phone || '';
+        document.getElementById('location').value = data.personal.location || '';
+        document.getElementById('website').value = data.personal.website || '';
+        document.getElementById('summary').value = data.summary || '';
+        document.getElementById('skills').value = (data.skills || []).join(', ');
+
+        // 2. Clear and Repopulate Dynamic Fields
+        document.getElementById('experienceContainer').innerHTML = ''; 
+        document.getElementById('educationContainer').innerHTML = '';
+        
+        // Repopulate Experience
+        (data.experience || []).forEach(exp => {
+            this.addExperienceField();
+            const items = document.querySelectorAll('.experience-item');
+            const item = items[items.length - 1];
+            item.querySelector('.exp-title').value = exp.title || '';
+            item.querySelector('.exp-company').value = exp.company || '';
+            item.querySelector('.exp-start').value = exp.startDate || '';
+            item.querySelector('.exp-end').value = exp.endDate || '';
+            item.querySelector('.exp-description').value = exp.description || '';
+        });
+        
+        // Repopulate Education
+        (data.education || []).forEach(edu => {
+            this.addEducationField();
+            const items = document.querySelectorAll('.education-item');
+            const item = items[items.length - 1];
+            item.querySelector('.edu-degree').value = edu.degree || '';
+            item.querySelector('.edu-school').value = edu.school || '';
+            item.querySelector('.edu-year').value = edu.year || '';
+            item.querySelector('.edu-gpa').value = edu.gpa || '';
+        });
+        
+        // Ensure one blank field exists for user input if the loaded data was empty
+        if ((data.experience || []).length === 0) this.addExperienceField();
+        if ((data.education || []).length === 0) this.addEducationField();
+
+        this.updatePreview(); 
     }
 
 

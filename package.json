@@ -1,0 +1,8 @@
+{
+  "name": "resumebuilder-app",
+  "version": "1.0.0",
+  "description": "A static site with Supabase backend",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.4"
+  }
+}
