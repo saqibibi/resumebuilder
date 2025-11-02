@@ -5,11 +5,16 @@
 // --- Top of js/builder.js ---
 
 // Initialize Supabase client using Vercel environment variables
-const SUPABASE_URL = window.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.NEXT_PUBLIC_SUPABASE_ANON_KEY; 
+// --- Top of js/builder.js ---
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Supabase client
+// 🛑 REPLACE THESE KEYS with your actual Supabase keys from your dashboard
+const SUPABASE_URL = 'https://lvjkrqkuzthpjrexdabw.supabase.co';
+ 
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2amtycWt1enRocGpyZXhkYWJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwODk3NTgsImV4cCI6MjA3NzY2NTc1OH0.yCoYwNawqNiCQSPTSQuUTR566CLzCXJV7SaNcGyO9sc'; 
 
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 class ResumeBuilder {
     constructor() {
         this.currentTemplate = 'ats';
@@ -560,32 +565,32 @@ class ResumeBuilder {
     }
 
     // --- AUTHENTICATION / UI MANAGEMENT ---
+   // --- AUTHENTICATION / UI MANAGEMENT ---
     async handleAuth() {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user } } = await supabaseClient.auth.getUser();
         this.currentUser = user;
         const authButton = document.getElementById('authButton');
         const authText = document.getElementById('authText');
         const saveButton = document.getElementById('saveResumeBtn');
-
         if (user) {
+            // --- User is LOGGED IN ---
             authButton.innerHTML = 'Logout';
             authButton.onclick = async () => {
-                await supabase.auth.signOut();
-                this.handleAuth();
+                await supabaseClient.auth.signOut();
+                this.handleAuth(); // Re-check status
                 alert('You have been logged out.');
             };
             authText.innerHTML = `Signed in as: <strong>${user.email}</strong>`;
-            saveButton.style.display = 'inline-flex';
-            this.loadResumeDraft(); 
+            saveButton.style.display = 'inline-flex'; // Show save button
+            
+            // Load their draft
+            this.loadResumeDraft();
+            
         } else {
-            authButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login / Sign Up';
-            authButton.onclick = () => {
-                alert('For this prototype, please sign up/log in using a dedicated Supabase page. This button only logs out once you are logged in.');
-            };
-            authButton.classList.remove('active');
-            authText.innerHTML = 'Log in to save your draft.';
-            saveButton.style.display = 'none';
-            this.populateForm({ personal: {}, experience: [], education: [], skills: [] }); 
+            // --- User is LOGGED OUT ---
+            // Act as a security gate and redirect to the auth page
+            alert('You must be logged in to access the builder.');
+            window.location.href = 'auth.html';
         }
     }
 
@@ -605,7 +610,8 @@ class ResumeBuilder {
         
         try {
             // Check if user already has a resume (for UPDATE operation)
-            const { data: existingResume } = await supabase
+            // Use the new 'supabaseClient' variable
+            const { data: existingResume } = await supabaseClient
                 .from('resumes')
                 .select('id')
                 .eq('user_id', this.currentUser.id)
@@ -619,16 +625,16 @@ class ResumeBuilder {
             let saveError;
             
             if (existingResume && existingResume.length > 0) {
-                // UPDATE existing record
-                const { error } = await supabase
+                // UPDATE: Use the new 'supabaseClient' variable
+                const { error } = await supabaseClient
                     .from('resumes')
                     .update(resumeDataToSave)
                     .eq('id', existingResume[0].id);
                 saveError = error;
                 if (!saveError) alert('Draft updated successfully!');
             } else {
-                // INSERT new record
-                const { error } = await supabase
+                // INSERT: Use the new 'supabaseClient' variable
+                const { error } = await supabaseClient
                     .from('resumes')
                     .insert([resumeDataToSave]);
                 saveError = error;
@@ -651,7 +657,8 @@ class ResumeBuilder {
         if (!this.currentUser) return;
 
         try {
-            const { data } = await supabase
+            // Use the new 'supabaseClient' variable
+            const { data } = await supabaseClient
                 .from('resumes')
                 .select('data_json')
                 .eq('user_id', this.currentUser.id)
